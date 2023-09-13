@@ -1,160 +1,225 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import simpledialog
+import json
+import random
+import string
+import pyperclip  # For clipboard functionality
 
-# C extensions
-*.so
+# Function to save passwords and master password to a JSON file
+def save_data(data, filename):
+    with open(filename, 'w') as file:
+        json.dump(data, file)
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Function to load passwords and master password from a JSON file
+def load_data(filename):
+    try:
+        with open(filename, 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {'passwords': {}, 'master_password': None}
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Function to generate a random password
+def generate_password():
+    length = simpledialog.askinteger("Generate Password", "Enter the desired length of the new password:")
+    num_capitals = simpledialog.askinteger("Generate Password", "Enter the number of uppercase letters:")
+    num_special_chars = simpledialog.askinteger("Generate Password", "Enter the number of special characters:")
+    num_numbers = simpledialog.askinteger("Generate Password", "Enter the number of numbers:")
+    label = simpledialog.askstring("Generate Password", "Enter a label for this password:")
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+    if None in (length, num_capitals, num_special_chars, num_numbers, label):
+        return  # User canceled
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+    lowercase_letters = string.ascii_lowercase
+    uppercase_letters = string.ascii_uppercase
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?/"
+    numbers = string.digits
 
-# Translations
-*.mo
-*.pot
+    password = []
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+    # Add required number of uppercase letters
+    password.extend(random.choice(uppercase_letters) for _ in range(num_capitals))
 
-# Flask stuff:
-instance/
-.webassets-cache
+    # Add required number of special characters
+    password.extend(random.choice(special_chars) for _ in range(num_special_chars))
 
-# Scrapy stuff:
-.scrapy
+    # Add required number of numbers
+    password.extend(random.choice(numbers) for _ in range(num_numbers))
 
-# Sphinx documentation
-docs/_build/
+    # Add remaining characters with lowercase letters
+    remaining_length = length - (num_capitals + num_special_chars + num_numbers)
+    password.extend(random.choice(lowercase_letters) for _ in range(remaining_length))
 
-# PyBuilder
-.pybuilder/
-target/
+    # Shuffle the password
+    random.shuffle(password)
 
-# Jupyter Notebook
-.ipynb_checkpoints
+    generated_password = ''.join(password)
+    data['passwords'][label] = generated_password
+    save_data(data, 'passwords.json')
+    update_password_listbox()
+    messagebox.showinfo("Password Generated", f"Password for '{label}' has been generated and saved.")
 
-# IPython
-profile_default/
-ipython_config.py
+# Function to add a new password
+def add_password():
+    website = simpledialog.askstring("Add Password", "Enter the website or service name:")
+    if website is None:
+        return  # User canceled
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+    password = simpledialog.askstring("Add Password", f"Enter the password for '{website}':", show='*')
+    if password is None:
+        return  # User canceled
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+    # Confirm the password
+    confirm_password = simpledialog.askstring("Confirm Password", f"Confirm the password for '{website}':", show='*')
+    if confirm_password is None:
+        return  # User canceled
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+    if password == confirm_password:
+        data['passwords'][website] = password
+        save_data(data, 'passwords.json')
+        update_password_listbox()
+        messagebox.showinfo("Password Added", f"Password for '{website}' has been added.")
+    else:
+        messagebox.showerror("Password Mismatch", "Passwords do not match. Password not saved.")
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
+# Function to retrieve and reveal a password
+def reveal_password():
+    selected_item = passwords_listbox.curselection()
+    if not selected_item:
+        messagebox.showwarning("No Selection", "Please select a password to reveal.")
+        return
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+    label = passwords_listbox.get(selected_item)
+    password = data['passwords'].get(label)
+    if password:
+        master_password = simpledialog.askstring("Master Password", "Enter the master password:", show='*')
+        if master_password is None:
+            return  # User canceled
+        if master_password == data['master_password']:
+            pyperclip.copy(password)  # Copy password to clipboard
+            messagebox.showinfo(f"Password for '{label}'", "Password copied to clipboard.")
+        else:
+            messagebox.showerror("Incorrect Master Password", "Incorrect master password. Access denied.")
+    else:
+        messagebox.showwarning("Password not found", f"No password found for '{label}'.")
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+# Function to edit a password
+def edit_password():
+    selected_item = passwords_listbox.curselection()
+    if not selected_item:
+        messagebox.showwarning("No Selection", "Please select a password to edit.")
+        return
 
-# SageMath parsed files
-*.sage.py
+    label = passwords_listbox.get(selected_item)
+    password = data['passwords'].get(label)
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+    # Confirm the master password
+    master_password = simpledialog.askstring("Master Password", "Enter the master password:", show='*')
+    if master_password is None:
+        return  # User canceled
+    if master_password != data['master_password']:
+        messagebox.showerror("Incorrect Master Password", "Incorrect master password. Access denied.")
+        return
 
-# Spyder project settings
-.spyderproject
-.spyproject
+    # Edit the password
+    new_password = simpledialog.askstring("Edit Password", f"Edit the password for '{label}':", show='*')
+    if new_password is None:
+        return  # User canceled
 
-# Rope project settings
-.ropeproject
+    # Confirm the new password
+    confirm_new_password = simpledialog.askstring("Confirm New Password", f"Confirm the new password for '{label}':", show='*')
+    if confirm_new_password is None:
+        return  # User canceled
 
-# mkdocs documentation
-/site
+    if new_password == confirm_new_password:
+        data['passwords'][label] = new_password
+        save_data(data, 'passwords.json')
+        update_password_listbox()
+        messagebox.showinfo("Password Updated", f"Password for '{label}' has been updated.")
+    else:
+        messagebox.showerror("Password Mismatch", "Passwords do not match. Password not updated.")
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Function to remove a password
+def remove_password():
+    selected_item = passwords_listbox.curselection()
+    if not selected_item:
+        messagebox.showwarning("No Selection", "Please select a password to remove.")
+        return
 
-# Pyre type checker
-.pyre/
+    label = passwords_listbox.get(selected_item)
 
-# pytype static type analyzer
-.pytype/
+    # Confirm the master password
+    master_password = simpledialog.askstring("Master Password", "Enter the master password:", show='*')
+    if master_password is None:
+        return  # User canceled
+    if master_password != data['master_password']:
+        messagebox.showerror("Incorrect Master Password", "Incorrect master password. Access denied.")
+        return
 
-# Cython debug symbols
-cython_debug/
+    # Confirm the deletion
+    confirm = messagebox.askokcancel("Confirm Removal", f"Are you sure you want to permanently delete the password for '{label}'?")
+    if confirm:
+        data['passwords'].pop(label, None)
+        save_data(data, 'passwords.json')
+        update_password_listbox()
+        messagebox.showinfo("Password Removed", f"Password for '{label}' has been removed.")
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+# Function to create or change the master password
+def create_master_password():
+    global data
+    master_password = simpledialog.askstring("Create/Change Master Password", "Enter the master password:", show='*')
+    if master_password is not None:
+        data['master_password'] = master_password
+        save_data(data, 'passwords.json')
+        messagebox.showinfo("Master Password Set/Changed", "Master password has been set/changed successfully.")
+
+# Function to update the list of passwords
+def update_password_listbox():
+    passwords_listbox.delete(0, tk.END)
+    labels = data['passwords'].keys()
+    for label in labels:
+        passwords_listbox.insert(tk.END, label)
+
+# Create the main window
+root = tk.Tk()
+root.title("Password Manager")
+
+# Load passwords and master password from the JSON file
+data = load_data('passwords.json')
+
+# Ensure the 'passwords' key exists in the data dictionary
+if 'passwords' not in data:
+    data['passwords'] = {}
+
+# Create buttons for adding, generating, and retrieving passwords
+add_button = tk.Button(root, text="Add Password (Alt+A)", command=add_password)
+generate_button = tk.Button(root, text="Generate Password (Alt+G)", command=generate_password)
+create_master_password_button = tk.Button(root, text="Create/Change Master Password (Alt+C)", command=create_master_password)
+
+add_button.pack(pady=10)
+generate_button.pack(pady=5)
+create_master_password_button.pack(pady=5)
+
+# Create a listbox to display passwords and buttons for revealing, editing, and removing passwords
+passwords_listbox = tk.Listbox(root)
+reveal_button = tk.Button(root, text="Reveal Password (Alt+R)", command=reveal_password)
+edit_button = tk.Button(root, text="Edit Password (Alt+E)", command=edit_password)
+remove_button = tk.Button(root, text="Remove Password (Alt+D)", command=remove_password)
+
+passwords_listbox.pack()
+reveal_button.pack(side=tk.LEFT, padx=5)
+edit_button.pack(side=tk.LEFT, padx=5)
+remove_button.pack(side=tk.LEFT, padx=5)
+
+# Update the list of passwords
+update_password_listbox()
+
+# Keyboard shortcuts
+root.bind("<Alt-a>", lambda event: add_password())
+root.bind("<Alt-g>", lambda event: generate_password())
+root.bind("<Alt-c>", lambda event: create_master_password())
+root.bind("<Alt-r>", lambda event: reveal_password())
+root.bind("<Alt-e>", lambda event: edit_password())
+root.bind("<Alt-d>", lambda event: remove_password())
+
+root.mainloop()
